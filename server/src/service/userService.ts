@@ -3,6 +3,10 @@ import { v4 } from "uuid"
 import UserDto from "../dto/userDto"
 import prisma from "../database"
 import tokenService from './tokenService'
+import mailService from './mailService'
+import { config } from 'dotenv'
+
+config()
 
 class UserService {
   async registration({username, email, password}: RegistrationRequest):Promise<RegistrationResponse> {
@@ -18,11 +22,27 @@ class UserService {
       }
     })
 
+    await mailService.sendActivationMail(
+      user.email,
+      `${process.env.API_URL}/auth/activate/${activationLink}`
+    )
+
     const userDto = new UserDto(user)
     const tokens = tokenService.generateTokens(userDto) 
     await tokenService.saveTokens(user.userId, tokens.refreshToken)
 
     return {user: {...userDto}, tokens}
+  }
+
+  async activate(activationLink: string) {
+    const user = await prisma.user.findFirst({
+      where: {activationLink}
+    })
+    if (!user) throw new Error('Such user does not exist')
+    await prisma.user.update({
+      where: {userId: user.userId},
+      data: { isActivated: true }  
+    })
   }
 }
 
