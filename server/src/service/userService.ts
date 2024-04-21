@@ -5,13 +5,15 @@ import prisma from "../database"
 import tokenService from './tokenService'
 import mailService from './mailService'
 import { config } from 'dotenv'
+import ApiError from '../exceptions/apiError'
+import type { RegistrationRequest } from '../controller/authController'
 
 config()
 
 class UserService {
   async registration({username, email, password}: RegistrationRequest):Promise<RegistrationResponse> {
     const candidate = await prisma.user.findUnique({where: { username }})
-    if (candidate) throw new Error('Such user already exist')
+    if (candidate) throw ApiError.BadRequest('Such user already exist')
     
     const hashPassword = await hash(password, 4) 
     const activationLink = v4()
@@ -38,7 +40,7 @@ class UserService {
     const user = await prisma.user.findFirst({
       where: {activationLink}
     })
-    if (!user) throw new Error('Such user does not exist')
+    if (!user) throw ApiError.BadRequest('Such user does not exist')
     await prisma.user.update({
       where: {userId: user.userId},
       data: { isActivated: true }  
