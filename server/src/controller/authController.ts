@@ -1,46 +1,74 @@
 import { Request, Response } from "express"
 import userService from "../service/userService"
 import { config } from "dotenv"
-import {Input, parse, ValiError} from 'valibot'
-import {RegistrationScheme} from '../lib/validation/authValidation'
+import {Input, parse, ValiError, SchemaIssue, string} from 'valibot'
+import {RegistrationScheme, LoginScheme} from '../lib/validation/authValidation'
 import ApiError from "../exceptions/apiError"
 
 config()
 
 export type RegistrationRequest = Input<typeof RegistrationScheme>
+type LoginRequest = Input<typeof LoginScheme>
 
 class AuthController {
   async registration(
     request: Request<{}, {}, RegistrationRequest>,
-    response: Response<RegistrationResponse | string>,
+    response: Response<UserResponse | string>,
     next: Function
   ) {
     try {
-      const {username, email, password} = request.body
       const requestingBody: RegistrationRequest = parse(
-        RegistrationScheme, {username, email, password}
+        RegistrationScheme, {
+          username: request.body.username, 
+          email: request.body.email, 
+          password: request.body.password
+        }
       )
 
-      const userData: RegistrationResponse = await userService.registration(requestingBody)
+      const userData: UserResponse = await userService.registration(requestingBody)
       response.cookie('refreshToken', userData.tokens.refreshToken, {httpOnly: true})
       return response.send(userData)
     } catch (error: unknown) {
       if (error instanceof ValiError) {
-        console.log(error.issues)
-        return next(ApiError.BadRequest('The validation error', [...error.issues]))
+        const messages: string[] = error.issues.map((issue: SchemaIssue) => issue.message)
+        return next(ApiError.BadRequest('The validation error', messages))
       }
       return next(error as Error)
     }
   }
 
-  async login(request: Request, response: Response, next: Function) {
-    try {} catch (error: unknown) {
-      next(error as Error)
+  async login(
+    request: Request<{}, {}, {usernameOrEmail: string, password: string}>, 
+    response: Response, 
+    next: Function
+  ) {
+    try {
+      const requestingData = parse(LoginScheme, {
+        usernameOrEmail: request.body.usernameOrEmail,
+        password: request.body.password
+      })
+
+      const userData: UserResponse = await userService.login(
+        requestingData.usernameOrEmail, requestingData.password
+      )
+      response.cookie('refreshToken', userData.tokens.refreshToken, {httpOnly: true})
+      return response.send(userData)
+    } catch (error: unknown) {
+      if (error instanceof ValiError) {
+        const messages: string[] = error.issues.map((issue: SchemaIssue) => issue.message)
+        return next(ApiError.BadRequest('The validation error', messages))
+      }
+      return next(error as Error)
     }
   }
 
-  async logout(request: Request, response: Response, next: Function) {
-    try {} catch (error: unknown) {
+  async logout(request: Request<{},{},{refreshToken: string}>, response: Response, next: Function) {
+    try {
+      const refreshToken = parse(string(), request.body.refreshToken)
+      await userService.logout(refreshToken)
+      response.clearCookie('refreshToken')
+      response.status(200).send('ok')
+    } catch (error: unknown) {
       next(error as Error)
     }
   }

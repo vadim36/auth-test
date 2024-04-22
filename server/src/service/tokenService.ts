@@ -27,6 +27,12 @@ class TokenService {
       data: {userId, tokenData: refreshToken }
     })
   }
+
+  async removeToken(refreshToken: string) {
+    return await prisma.refreshToken.delete({
+      where: {tokenData: refreshToken}
+    })
+  }
 }
 
 export default new TokenService()

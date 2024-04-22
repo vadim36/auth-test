@@ -3,7 +3,7 @@ interface Tokens {
   refreshToken: string
 }
 
-type RegistrationResponse = {
+type UserResponse = {
   user: UserDto,
   tokens: Tokens
 }

@@ -1,4 +1,4 @@
-import {hash} from 'bcrypt'
+import {hash, compare} from 'bcrypt'
 import { v4 } from "uuid"
 import UserDto from "../dto/userDto"
 import prisma from "../database"
@@ -7,11 +7,12 @@ import mailService from './mailService'
 import { config } from 'dotenv'
 import ApiError from '../exceptions/apiError'
 import type { RegistrationRequest } from '../controller/authController'
+import { RefreshToken } from '@prisma/client'
 
 config()
 
 class UserService {
-  async registration({username, email, password}: RegistrationRequest):Promise<RegistrationResponse> {
+  async registration({username, email, password}: RegistrationRequest):Promise<UserResponse> {
     const candidate = await prisma.user.findUnique({where: { username }})
     if (candidate) throw ApiError.BadRequest('Such user already exist')
     
@@ -36,7 +37,36 @@ class UserService {
     return {user: {...userDto}, tokens}
   }
 
-  async activate(activationLink: string) {
+  async login(usernameOrEmail: string, password: string):Promise<UserResponse>  {
+    const candidate = await prisma.user.findFirst({
+      where: { 
+        OR: [
+          {username: usernameOrEmail},
+          {email: usernameOrEmail}
+        ]
+      }
+    })
+
+    if (!candidate) throw ApiError.BadRequest('Such user does not exist')
+    const isPasswordEquals:boolean = await compare(password, candidate.password)
+    if (!isPasswordEquals) throw ApiError.BadRequest('The passwords do not equal')
+    
+    const userDto = new UserDto(candidate)
+    const tokens: Tokens = tokenService.generateTokens(userDto)
+    await tokenService.saveTokens(userDto.userId, tokens.refreshToken)
+
+    return {user: userDto, tokens}
+  }
+
+  async logout(refreshToken: string):Promise<RefreshToken> {
+    const candidateToken = await prisma.refreshToken.findUnique({
+      where: {tokenData: refreshToken}
+    })
+    if (!candidateToken) throw ApiError.BadRequest('Such user does not exist')
+    return await tokenService.removeToken(candidateToken.tokenData)
+  }
+
+  async activate(activationLink: string):Promise<void> {
     const user = await prisma.user.findFirst({
       where: {activationLink}
     })

@@ -15,3 +15,14 @@ export const RegistrationScheme = object({
     maxLength(32, 'the password must be longer than 32')
   ])
 })
+
+export const LoginScheme = object({
+  usernameOrEmail: string('the id must be a string', [
+    minLength(3, 'the id must be longer than 3'),
+    maxLength(45, 'the id must be less than 45'),
+  ]),
+  password: string('the password must be a string', [
+    minLength(5, 'the password must be longer than 5'),
+    maxLength(32, 'the password must be longer than 32')
+  ])
+})
