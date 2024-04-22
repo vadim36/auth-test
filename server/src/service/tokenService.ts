@@ -1,7 +1,8 @@
 import UserDto from "../dto/userDto"
 import {config} from 'dotenv'
-import {sign} from 'jsonwebtoken'
+import {JwtPayload, sign, verify} from 'jsonwebtoken'
 import prisma from "../database"
+import { RefreshToken } from "@prisma/client"
 
 config()
 
@@ -15,7 +16,7 @@ class TokenService {
     }
   }
 
-  async saveTokens(userId: string, refreshToken: string) {
+  async saveTokens(userId: string, refreshToken: string):Promise<RefreshToken> {
     const candidateToken = await prisma.refreshToken.findUnique({where: {userId}})
     if (candidateToken) {
       return await prisma.refreshToken.update({
@@ -28,10 +29,30 @@ class TokenService {
     })
   }
 
-  async removeToken(refreshToken: string) {
+  async removeToken(refreshToken: string):Promise<RefreshToken> {
     return await prisma.refreshToken.delete({
       where: {tokenData: refreshToken}
     })
+  }
+
+  validateAccessToken(accessToken: string):JwtPayload | string | null {
+    try {
+      return verify(accessToken, process.env.ACCESS_SECRET as string)
+    } catch (error: unknown) {
+      return null
+    }
+  }
+
+  validateRefreshToken(refreshToken: string):JwtPayload | string | null {
+    try {
+      return verify(refreshToken, process.env.REFRESH_SECRET as string)
+    } catch (error: unknown) {
+      return null
+    }
+  }
+
+  async findToken(refreshToken: string):Promise<RefreshToken | null> {
+    return await prisma.refreshToken.findUnique({ where: {tokenData: refreshToken}})
   }
 }
 

@@ -7,7 +7,7 @@ import mailService from './mailService'
 import { config } from 'dotenv'
 import ApiError from '../exceptions/apiError'
 import type { RegistrationRequest } from '../controller/authController'
-import { RefreshToken } from '@prisma/client'
+import { RefreshToken, User } from '@prisma/client'
 
 config()
 
@@ -66,15 +66,29 @@ class UserService {
     return await tokenService.removeToken(candidateToken.tokenData)
   }
 
-  async activate(activationLink: string):Promise<void> {
+  async activate(activationLink: string):Promise<User | ApiError> {
     const user = await prisma.user.findFirst({
       where: {activationLink}
     })
     if (!user) throw ApiError.BadRequest('Such user does not exist')
-    await prisma.user.update({
+    return await prisma.user.update({
       where: {userId: user.userId},
       data: { isActivated: true }  
     })
+  }
+
+  async refresh(refreshToken: string):Promise<UserResponse> {
+    if (!refreshToken) throw ApiError.UnauthtorizedError()
+    const userPayload = tokenService.validateRefreshToken(refreshToken)
+    const tokenFromDb = await tokenService.findToken(refreshToken)
+    if (!userPayload || !tokenFromDb) throw ApiError.UnauthtorizedError()
+    
+    const user = await prisma.user.findUnique({where: {userId: tokenFromDb.userId}})
+    const userDto = new UserDto(user!)
+    
+    const tokens: Tokens = tokenService.generateTokens(userDto)
+    await tokenService.saveTokens(userDto.userId, tokens.refreshToken)
+    return {user: userDto, tokens}
   }
 }
 
