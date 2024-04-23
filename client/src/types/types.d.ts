@@ -10,6 +10,14 @@ interface IUser extends UserDto {
   role: string
 }
 
+interface TAuthContext {
+  isAuth: boolean,
+  user: UserDto | null,
+  registration: (({username, email, password}: RegistrationRequest) => Promise<void | Error>) | null
+  login: ((usernameOrEmail: string, password: string) => Promise<void | Error>) | null
+  logout: (() => Promise<void | Error>) | null
+}
+
 interface RegistrationRequest {
   username: string,
   email: string,
